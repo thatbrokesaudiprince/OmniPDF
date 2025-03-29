@@ -22,20 +22,11 @@ DOC-TOR is a document analyzer capable of translation, summarization, extraction
 ## Installation
 Step-by-step instructions on how to install and set up your project.
 
-```bash
-# Example
-git clone https://github.com/username/repository.git
-cd repository
-npm install
-```
 
 ## Usage
 Explain how to use your project, including examples if applicable.
 
-```bash
-# Example
-npm start
-```
+
 
 ## Contributing
 Guidelines for contributing to your project.
