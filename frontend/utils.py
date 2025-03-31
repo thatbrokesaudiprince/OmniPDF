@@ -1,4 +1,3 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
 import pdfplumber
 import streamlit as st
 import base64
