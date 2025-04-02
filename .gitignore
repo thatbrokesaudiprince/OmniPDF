@@ -1,4 +1,8 @@
 *.gguf 
 __pycache__/ 
 .venv/
-.data/
+data/
+extracted_images/
+ocr_pdf/
+.poppler-24.08.0/
+llama-cpp-python
