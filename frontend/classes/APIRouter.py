@@ -83,7 +83,7 @@ def summarize_table(data: list, client: OpenAI) -> list:
     prompt = f"""
         <|START_OF_TURN_TOKEN|><|USER_TOKEN|>Provide a text summary in English of the following table provided:
 
-        {json.dumps(data.table_data)}
+        {json.dumps(data)}
 
         Provide only the text summary, without any additional explanations.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|ASSISTANT_TOKEN|>
     """
@@ -142,3 +142,32 @@ def translate_table(table, client: OpenAI) -> str:
     print(f"Inference time: {inference_time} seconds")
 
     return json.loads(response.choices[0].message.content)
+
+
+def rag_prompt(prompt, docs, client: OpenAI) -> str:
+    start_time = time.time()
+
+    helping = "\n".join([f" - {doc.page_content}" for doc in docs])
+    prompt_with_help = f"""Answer this prompt:
+        {prompt}
+        Use the following pieces of context (if needed) to support and answer the question. If you do not know, then say do not know:
+        {helping}
+    """
+
+    response = client.chat.completions.create(
+        model="aya-expanse-8b",
+        messages=[
+            {
+                "role": "system",
+                "content": """
+                    You are a helpful assistant with answering user questions with RAG capabilities. You will be given documents relevant to the question for support.
+                """,
+            },
+            {"role": "user", "content": prompt_with_help},
+        ],
+        temperature=0.2,
+    )
+    inference_time = time.time() - start_time
+    print(f"Inference time: {inference_time} seconds")
+
+    return response.choices[0].message.content

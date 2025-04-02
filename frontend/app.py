@@ -14,6 +14,7 @@ from classes.APIRouter import (
     summarize_table,
     summarize_text,
     caption_image,
+    rag_prompt,
     CLIENT,
 )
 
@@ -84,13 +85,16 @@ def main():
 
             with chat_tab:
                 if st.button("Embed Text") and ALL_TEXT:
+                    # Split text into chunks of 1024
                     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024)
-                    docs = text_splitter.split_text(ALL_TEXT)
+                    text_docs = text_splitter.split_text(ALL_TEXT)
 
                     # Insert the Documents as embeddings to the vector database
-                    # Translate text to English
                     doc_data = []
-                    for i, doc in enumerate(docs, start=1):
+
+                    # Text Documents
+                    for i, doc in enumerate(text_docs, start=1):
+                        # Translate text to English
                         translated_text = translate_text(doc, CLIENT)
                         doc_data.append(
                             Document(
@@ -102,27 +106,109 @@ def main():
                                 },
                             )
                         )
+
+                    # Table Documents
+                    st.session_state.translated_tables2 = {}
+                    count = 1
+                    if not st.session_state.TRANSLATED_TABLES:
+                        for page in PAGES_DATA:
+                            for table in page.get("tables", []):
+                                translated_table = translate_table(
+                                    tbp.format_for_json(table), CLIENT
+                                )
+                                st.session_state.translated_tables2[str(count)] = (
+                                    translated_table
+                                )
+                                count += 1
+                    else:
+                        for table in st.session_state.TRANSLATED_TABLES:
+                            st.session_state.translated_tables2[str(count)] = table
+                            count += 1
+
+                    for i, doc in st.session_state.translated_tables2.items():
+                        summary = summarize_table(doc, CLIENT)
+                        doc_data.append(
+                            Document(
+                                page_content=summary,
+                                metadata={
+                                    "chunk_index": i,
+                                    "source": uploaded_file.name,
+                                    "type": "table",
+                                    "table_content_key": i,
+                                },
+                            )
+                        )
+
+                    # Image Documents
+                    for i, doc in enumerate(
+                        st.session_state.IMAGE_CAPTIONS.keys(), start=1
+                    ):
+                        doc_data.append(
+                            Document(
+                                page_content=st.session_state.IMAGE_CAPTIONS[doc],
+                                metadata={
+                                    "chunk_index": str(i),
+                                    "source": uploaded_file.name,
+                                    "type": "image",
+                                    "img_path": str(doc),
+                                },
+                            )
+                        )
                     rh.add_docs_to_chromadb(doc_data)
-                    docs = rh.retrieve_relevant_docs("Summarize this")
-                    print(docs)
 
                 if "messages" not in st.session_state:
                     st.session_state.messages = []
 
-                for message in st.session_state.messages:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
+                # Create a scrollable chat container using st.container()
+                chat_container = st.container()
 
+                with chat_container:
+                    message_placeholder = (
+                        st.empty()
+                    )  # Placeholder to store messages dynamically
+
+                    # Display chat history inside a container
+                    with message_placeholder.container():
+                        for message in st.session_state.messages:
+                            with st.chat_message(message["role"]):
+                                st.markdown(message["content"])
+
+                # Handle user input
                 if prompt := st.chat_input("Ask me anything about your document!"):
                     st.session_state.messages.append(
                         {"role": "user", "content": prompt}
                     )
-                    response = f"Echo: {prompt}"
+
+                    rel_docs = rh.retrieve_relevant_docs(prompt)
+                    response = rag_prompt(prompt, rel_docs, CLIENT)
+
                     st.session_state.messages.append(
                         {"role": "assistant", "content": response}
                     )
-                    with st.chat_message("assistant"):
-                        st.markdown(response)
+
+                    # Update chat display dynamically
+                    with message_placeholder.container():
+                        for message in st.session_state.messages:
+                            with st.chat_message(message["role"]):
+                                st.markdown(message["content"])
+
+                        for doc in rel_docs:
+                            if doc.metadata.get("type") == "text":
+                                st.markdown(doc.page_content)
+                            elif doc.metadata.get("type") == "table":
+                                st.write("Table Data:")
+                                print
+                                st.dataframe(
+                                    st.session_state.translated_tables2[
+                                        doc.metadata.get("table_content_key")
+                                    ]
+                                )
+                            elif doc.metadata.get("type") == "image":
+                                st.image(
+                                    doc.metadata["img_path"],
+                                    caption=doc.page_content,
+                                    use_column_width=True,
+                                )
 
         with st.expander("View Tables"):
             extracted_tables_col, TRANSLATED_TABLES_col = st.columns(2)
@@ -166,7 +252,7 @@ def main():
                         caption = caption_image(img, CLIENT)
                     except:
                         caption = "Failed to caption"
-                    IMAGE_CAPTIONS[img] = caption
+                    st.session_state.IMAGE_CAPTIONS[img] = caption
                     st.image(
                         img,
                         caption=f"{caption}\nFound on Page: {page.get('page_number')}",
