@@ -4,5 +4,5 @@ __pycache__/
 data/
 extracted_images/
 ocr_pdf/
-.poppler-24.08.0/
+poppler-24.08.0/
 llama-cpp-python
