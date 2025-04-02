@@ -7,6 +7,18 @@ import pandas as pd
 from pdf2image import convert_from_path
 from PIL import Image
 from difflib import SequenceMatcher as SM
+from classes.APIRouter import (
+    translate_table,
+    translate_text,
+    summarize_table,
+    summarize_text,
+    caption_image,
+    CLIENT,
+)
+from classes.TableDataProcessor import TableDataProcessor
+
+
+tbp = TableDataProcessor()
 
 
 class PDFProcessor:
@@ -50,12 +62,27 @@ class PDFProcessor:
                     )
                 else:
                     filtered_text = raw_text
+                translated_text = translate_text(raw_text, CLIENT)
+                translated_tables = [
+                    translate_table(tbp.format_for_json(table), CLIENT)
+                    for table in tables
+                ]
+                translated_tables_summary = [
+                    {
+                        "key": f"trans_table_summary_{i+1}",
+                        "translated_table": translated_table,
+                        "summary": summarize_table(translated_table, CLIENT),
+                    }
+                    for i, translated_table in enumerate(translated_tables)
+                ]
                 # Store extracted data
                 self.pages_data.append(
                     {
                         "page_number": i + 1,
                         "text": filtered_text,
+                        "translated_text": translated_text,
                         "tables": tables,
+                        "translated_tables_summary": translated_tables_summary,
                         "images": [],
                     }
                 )
@@ -108,7 +135,13 @@ class PDFProcessor:
                     f.write(img_bytes)
                 print(f"✅ Successfully extracted: {img_path}")
                 # Store the image path in the page data
-                self.pages_data[page_number]["images"].append(img_path)
+                self.pages_data[page_number]["images"].append(
+                    {
+                        "image_url": image_url,
+                        "caption": caption_image(image_path=image_url),
+                    }
+                    for image_url in img_path
+                )
 
     def _extract_text_from_images(self, images: list) -> str:
         """Extracts text from images using OCR (supports Arabic and multiple languages)."""

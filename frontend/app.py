@@ -42,18 +42,14 @@ def main():
 
             pdf = PDFProcessor(file_path)
             st.session_state.PAGES_DATA = pdf.get_all_data()
-            st.session_state.TRANSLATED_TEXT = ""
-            st.session_state.TRANSLATED_TABLES = []
+            # st.session_state.TRANSLATED_TEXT = ""
+            # st.session_state.TRANSLATED_TABLES = []
             st.session_state.ALL_TEXT = "".join(
                 page.get("text", "") for page in st.session_state.PAGES_DATA
             )
-            st.session_state.IMAGE_CAPTIONS = {}
-
-        ALL_TEXT = st.session_state.ALL_TEXT
-        PAGES_DATA = st.session_state.PAGES_DATA
-        TRANSLATED_TEXT = st.session_state.TRANSLATED_TEXT
-        TRANSLATED_TABLES = st.session_state.TRANSLATED_TABLES
-        IMAGE_CAPTIONS = st.session_state.IMAGE_CAPTIONS
+            st.session_state.ALL_TEXT_TRANSLATED = "".join(
+                page.get("translated_text", "") for page in st.session_state.PAGES_DATA
+            )
 
         original_pdf_column, functionalities_column = st.columns(2)
 
@@ -63,31 +59,25 @@ def main():
             st.markdown(pdf_display, unsafe_allow_html=True)
 
         with functionalities_column:
-            translate_tab, summary_tab, chat_tab = st.tabs(
-                ["Translate Text", "View Summary", "Chat with Omni"]
-            )
+            translate_tab, chat_tab = st.tabs(["Translate Text", "Chat with Omni"])
 
             with translate_tab:
                 vernacular_text = st.text_area(
                     "Enter text to translate to English",
-                    st.session_state.TRANSLATED_TEXT,
+                    # st.session_state.TRANSLATED_TEXT,
                 )
                 if st.button("Translate Page/Table") and vernacular_text:
                     with st.spinner("Translating text..."):
-                        st.session_state.TRANSLATED_TEXT = translate_text(
-                            vernacular_text, CLIENT
-                        )
-                st.markdown(st.session_state.TRANSLATED_TEXT)
-
-            with summary_tab:
-                if st.button("Summarize"):
-                    st.info("Summary functionality is not yet implemented.")
+                        translation_response = translate_text(vernacular_text, CLIENT)
+                    st.markdown(translation_response)
 
             with chat_tab:
-                if st.button("Embed Text") and ALL_TEXT:
+                if st.button("Embed Text") and st.session_state.ALL_TEXT:
                     # Split text into chunks of 1024
                     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024)
-                    text_docs = text_splitter.split_text(ALL_TEXT)
+                    text_docs = text_splitter.split_text(
+                        st.session_state.ALL_TEXT_TRANSLATED
+                    )
 
                     # Insert the Documents as embeddings to the vector database
                     doc_data = []
@@ -95,10 +85,9 @@ def main():
                     # Text Documents
                     for i, doc in enumerate(text_docs, start=1):
                         # Translate text to English
-                        translated_text = translate_text(doc, CLIENT)
                         doc_data.append(
                             Document(
-                                page_content=translated_text,
+                                page_content=doc,
                                 metadata={
                                     "chunk_index": str(i),
                                     "source": uploaded_file.name,
@@ -108,41 +97,29 @@ def main():
                         )
 
                     # Table Documents
-                    st.session_state.translated_tables2 = {}
-                    count = 1
-                    if not st.session_state.TRANSLATED_TABLES:
-                        for page in PAGES_DATA:
-                            for table in page.get("tables", []):
-                                translated_table = translate_table(
-                                    tbp.format_for_json(table), CLIENT
-                                )
-                                st.session_state.translated_tables2[str(count)] = (
-                                    translated_table
-                                )
-                                count += 1
-                    else:
-                        for table in st.session_state.TRANSLATED_TABLES:
-                            st.session_state.translated_tables2[str(count)] = table
-                            count += 1
 
-                    for i, doc in st.session_state.translated_tables2.items():
-                        summary = summarize_table(doc, CLIENT)
-                        doc_data.append(
-                            Document(
-                                page_content=summary,
-                                metadata={
-                                    "chunk_index": i,
-                                    "source": uploaded_file.name,
-                                    "type": "table",
-                                    "table_content_key": i,
-                                },
+                    for page in st.session_state.PAGES_DATA:
+                        for table in page["translated_tables"]:
+                            summary = table["translated_table_summary"]
+
+                            doc_data.append(
+                                Document(
+                                    page_content=summary,
+                                    metadata={
+                                        "chunk_index": i,
+                                        "source": uploaded_file.name,
+                                        "type": "table",
+                                        "table_content_key": i,
+                                    },
+                                )
                             )
-                        )
 
                     # Image Documents
-                    for i, doc in enumerate(
-                        st.session_state.IMAGE_CAPTIONS.keys(), start=1
-                    ):
+                    for i, page in enumerate(st.session_state.PAGES_DATA, start=1):
+                        for image in page["images"]:
+                            url = image["image_url"]
+                            caption = image["caption"]
+
                         doc_data.append(
                             Document(
                                 page_content=st.session_state.IMAGE_CAPTIONS[doc],
@@ -197,7 +174,9 @@ def main():
                                 st.markdown(doc.page_content)
                             elif doc.metadata.get("type") == "table":
                                 st.write("Table Data:")
-                                print
+                                print(doc)
+                                print(st.session_state.translated_tables2)
+                                print(doc.page_content)
                                 st.dataframe(
                                     st.session_state.translated_tables2[
                                         doc.metadata.get("table_content_key")
@@ -214,23 +193,16 @@ def main():
             extracted_tables_col, TRANSLATED_TABLES_col = st.columns(2)
 
             with extracted_tables_col:
-                for page in PAGES_DATA:
+                for page in st.session_state.PAGES_DATA:
                     for table in page.get("tables", []):
                         st.write(f"Table on Page {page.get('page_number')}")
                         st.dataframe(table)
 
             with TRANSLATED_TABLES_col:
-                if st.button("Translate Tables"):
-                    st.session_state.TRANSLATED_TABLES = []
-                    for page in PAGES_DATA:
-                        for table in page.get("tables", []):
-                            translated_table = translate_table(
-                                tbp.format_for_json(table), CLIENT
-                            )
-
-                            st.session_state.TRANSLATED_TABLES.append(translated_table)
-                            st.write(f"Table on Page {page.get('page_number')}")
-                            st.dataframe(translated_table)
+                for page in st.session_state.PAGES_DATA:
+                    for table in page.get("translated_tables", []):
+                        st.write(f"Table on Page {page.get('page_number')}")
+                        st.dataframe(table)
 
         with st.expander("View WordCloud"):
             maxwords = st.number_input(
@@ -238,25 +210,30 @@ def main():
             )
             st.info(f"Displaying top {maxwords} words")
             wordcloud = wcg.generate_wordcloud(
-                text=ALL_TEXT,
+                text=st.session_state.ALL_TEXT,
+                max_words=maxwords,
+                height=200,
+                width=400,
+            )
+            translated_wordcloud = wcg.generate_wordcloud(
+                text=st.session_state.ALL_TEXT_TRANSLATED,
                 max_words=maxwords,
                 height=200,
                 width=400,
             )
             st.pyplot(wordcloud, use_container_width=True)
+            st.pyplot(translated_wordcloud)
 
         with st.expander("View Images"):
-            for page in PAGES_DATA:
-                for img in page.get("images", []):
-                    try:
-                        caption = caption_image(img, CLIENT)
-                    except:
-                        caption = "Failed to caption"
-                    st.session_state.IMAGE_CAPTIONS[img] = caption
+            for page in st.session_state.PAGES_DATA:
+                for image in page.get("images", []):
+                    caption = image["caption"]
                     st.image(
-                        img,
+                        image["image_url"],
                         caption=f"{caption}\nFound on Page: {page.get('page_number')}",
                     )
+
+        print(st.session_state.PAGES_DATA)
 
 
 if __name__ == "__main__":
