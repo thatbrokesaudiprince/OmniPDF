@@ -3,10 +3,10 @@ from openai import OpenAI
 import base64
 import json
 import time
-from frontend.classes.TableDataProcessor import TableDataProcessor
+import streamlit as st
 
 # Point to the local server
-client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+CLIENT = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
 
 
 def caption_image(image_path: str, client: OpenAI) -> str:
@@ -60,6 +60,24 @@ def translate_text(text: str, client: OpenAI) -> str:
     return response.choices[0].message.content
 
 
+def summarize_text(text: str, client: OpenAI) -> str:
+    start_time = time.time()
+    response = client.chat.completions.create(
+        model="aya-expanse-8b",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are an assistant specializing in summarizing content. Your task is to provide a concise summary of the given text. Focus on the main points and key information, while avoiding unnecessary details.",
+            },
+            {"role": "user", "content": text},
+        ],
+        temperature=0.2,
+    )
+    inference_time = time.time() - start_time
+    print(f"Inference time: {inference_time} seconds")
+    return response.choices[0].message.content
+
+
 def summarize_table(data: list, client: OpenAI) -> list:
     start_time = time.time()
     prompt = f"""
@@ -70,7 +88,7 @@ def summarize_table(data: list, client: OpenAI) -> list:
         Provide only the text summary, without any additional explanations.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|ASSISTANT_TOKEN|>
     """
 
-    completion = client.chat.completions.create(
+    response = client.chat.completions.create(
         model="aya-expanse-8b",
         messages=[
             {
@@ -89,54 +107,38 @@ def summarize_table(data: list, client: OpenAI) -> list:
         temperature=0.2,
     )
 
-    response_text = completion.choices[0].message.content
-
     inference_time = time.time() - start_time
     print(f"Inference time: {inference_time} seconds")
-    print(f"Response: {response_text}")
-
-    return response_text
+    return response.choices[0].message.content
 
 
-def translate_table(data: list, client: OpenAI) -> str:
-
+def translate_table(table, client: OpenAI) -> str:
+    data = {"table_data": table}
     start_time = time.time()
+    print(json.dumps(data["table_data"]))
     prompt = f"""
-        <|START_OF_TURN_TOKEN|><|USER_TOKEN|>Translate the following table into English, maintaining the original format:
+    <|START_OF_TURN_TOKEN|><|USER_TOKEN|>Translate the following table into English, maintaining the original format:
 
-        {json.dumps(data.table_data)}
+    {json.dumps(data['table_data'])}
 
-        Provide only the translated table, without any additional explanations.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|ASSISTANT_TOKEN|>
-    """
+    Provide only the translated table, without any additional explanations.<|END_OF_TURN_TOKEN|><|START_OF_TURN_TOKEN|><|ASSISTANT_TOKEN|>
+        """
 
-    completion = client.chat.completions.create(
+    response = client.chat.completions.create(
         model="aya-expanse-8b",
         messages=[
             {
                 "role": "system",
                 "content": """
-                    You are a helpful assistant tasked with translating the contents of the following table into English. Your translation should focus on preserving the original formatting and structure of the table while ensuring that the text is accurately translated. When translating, consider the following:
-                    - Maintain the original formatting and structure of the table.
-                    - Ensure that all text is accurately translated into English.
-                    - Avoid adding any additional explanations or comments.
+                    You are a helpful assistant tasked with translating the tables into English. The user will give u inputs in the form of nested lists,
+                    Translate each list contents and return with a nested list of the translated contents.
                 """,
             },
             {"role": "user", "content": prompt},
         ],
         temperature=0.2,
     )
-
-    response_text = completion.choices[0].message.content
-
     inference_time = time.time() - start_time
     print(f"Inference time: {inference_time} seconds")
-    print(f"Response: {response_text}")
 
-    return response_text
-
-
-def embed_text():
-    return
-
-
-tdp = TableDataProcessor()
+    return json.loads(response.choices[0].message.content)
