@@ -6,11 +6,11 @@ from pydantic import BaseModel
 import json
 import time
 
-aya_expanse_8b_path = r"backend\models\bartowski\aya-expanse-8b-GGUF\aya-expanse-8b-Q4_K_S.gguf"
+aya_expanse_8b_path = r"C:\Users\admin\Desktop\OmniPDF\backend\models\bartowski\aya-expanse-8b-GGUF\aya-expanse-8b-Q4_K_S.gguf"
 
 aya_expanse_8b_llm = Llama(
     model_path=aya_expanse_8b_path,
-    n_gpu_layers=32,
+    gpu_layers=-1,
     seed=1337,
     n_ctx=2048,
 )
