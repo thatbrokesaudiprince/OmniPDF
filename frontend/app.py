@@ -1,7 +1,6 @@
 import streamlit as st
 import os
 from utils import *  # Import functions from utils.py
-import json
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from classes.WordCloudGenerator import WordCloudGenerator
@@ -9,11 +8,7 @@ from classes.PDFProcessor import PDFProcessor
 from classes.TableDataProcessor import TableDataProcessor
 from classes.RAGHelper import RAGHelper
 from classes.APIRouter import (
-    translate_table,
     translate_text,
-    summarize_table,
-    summarize_text,
-    caption_image,
     rag_prompt,
     CLIENT,
 )
@@ -36,14 +31,16 @@ def main():
 
         # Save file only if not already processed
         if "pdf_file" not in st.session_state or st.session_state.pdf_file != file_path:
+            # Clear chat history for Chat with Omni
+            if "messages" in st.session_state:
+                st.session_state.messages = []
+
             with open(file_path, "wb") as temp_file:
                 temp_file.write(uploaded_file.read())
                 st.session_state.pdf_file = file_path
 
             pdf = PDFProcessor(file_path)
             st.session_state.PAGES_DATA = pdf.get_all_data()
-            # st.session_state.TRANSLATED_TEXT = ""
-            # st.session_state.TRANSLATED_TABLES = []
             st.session_state.ALL_TEXT = "".join(
                 page.get("text", "") for page in st.session_state.PAGES_DATA
             )
@@ -51,14 +48,14 @@ def main():
                 page.get("translated_text", "") for page in st.session_state.PAGES_DATA
             )
 
-            # Split text into chunks of 1024
+            # Split text into chunks of 1024 for RAG
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024)
             text_docs = text_splitter.split_text(st.session_state.ALL_TEXT_TRANSLATED)
 
-            # Insert the Documents as embeddings to the vector database
+            # Compile the documents
             st.session_state.DOCUMENTS = []
 
-            # Text Documents
+            # Text documents
             for i, doc in enumerate(text_docs):
                 st.session_state.DOCUMENTS.append(
                     Document(
@@ -71,7 +68,7 @@ def main():
                     )
                 )
 
-            # Table Documents
+            # Table documents
             for page in st.session_state.PAGES_DATA:
                 for trans_table_summary in page.get("translated_tables_summary", []):
                     key = trans_table_summary["key"]
@@ -88,10 +85,11 @@ def main():
                         )
                     )
 
-            # Image Documents
+            # Image documents
             for page in st.session_state.PAGES_DATA:
                 for image in page.get("images", []):
-                    key = image["image_caption_key"]
+                    print(image)
+                    key = image["key"]
                     caption = image["caption"]
 
                     st.session_state.DOCUMENTS.append(
@@ -105,9 +103,8 @@ def main():
                         )
                     )
 
+            # Insert the Documents as embeddings to the vector database
             rh.add_docs_to_chromadb(st.session_state.DOCUMENTS)
-            print(st.session_state.DOCUMENTS)
-            print("Embedded")
 
         original_pdf_column, functionalities_column = st.columns(2)
 
@@ -130,11 +127,20 @@ def main():
                     st.markdown(translation_response)
 
             with chat_tab:
+                # Chat with Omni
                 if "messages" not in st.session_state:
                     st.session_state.messages = []
 
                 # Create a scrollable chat container using st.container()
                 chat_container = st.container(height=600)
+
+                num_docs = st.number_input(
+                    "Documents to fetch",
+                    min_value=1,
+                    max_value=len(st.session_state.DOCUMENTS),
+                    value=min(5, len(st.session_state.DOCUMENTS) // 2),
+                    help="Specify the number of relevant documents to fetch and improve your prompt. Please note that the number may be limited and truncated by the model's max context length. The more the number of documents specified, the longer the process is.",
+                )
 
                 if prompt := st.chat_input("Ask me anything about your document!"):
                     st.session_state.messages.append(
@@ -152,18 +158,26 @@ def main():
                                 with st.chat_message(message["role"]):
                                     st.markdown(message["content"])
 
-                        rel_docs = rh.retrieve_relevant_docs(prompt)
-                        response = rag_prompt(
+                        # Retrieve top-k documents from vector database relevant to the prompt
+                        rel_docs = rh.retrieve_relevant_docs(prompt, num_docs)
+
+                        # Create new prompt with relevant documents
+                        response, docs = rag_prompt(
                             prompt, rel_docs, st.session_state.PAGES_DATA, CLIENT
                         )
 
-                        # Display response
-                        response += f"\n\n **References**"
+                        # Craft the response with citations
+                        if len(docs) < num_docs:
+                            response += f"\n\n **References (truncated)**"
+                        else:
+                            response += f"\n\n **References**"
 
-                        # Display citations
-                        for doc in rel_docs:
+                        # Compile citations
+                        for doc in docs:
+                            # Text documents
                             if doc.metadata.get("type") == "text":
-                                response += f"\n- {doc.page_content}"
+                                response += f"\n- Text Chunk {doc.metadata.get('text_chunk_key').replace('text_chunk', '')}"
+                            # Table documents
                             elif doc.metadata.get("type") == "table":
                                 found = False
                                 for page in st.session_state.PAGES_DATA:
@@ -176,11 +190,12 @@ def main():
                                             "trans_table_summary_key"
                                         ):
                                             summary = trans_table_summary["summary"]
-                                            response += f"\n- Table found on Page: {page.get('page_number')}"
+                                            response += f"\n- Table on Page: {page.get('page_number')}"
                                             found = True
                                             break
                                     if found:
                                         break
+                            # Image documents
                             elif doc.metadata.get("type") == "image":
                                 found = False
                                 for page in st.session_state.PAGES_DATA:
@@ -189,11 +204,13 @@ def main():
                                             "image_caption_key"
                                         ):
                                             caption = image["caption"]
-                                            response += f"\n- Image found on Page: {page.get('page_number')}"
+                                            response += f"\n- Image on Page: {page.get('page_number')}"
                                             found = True
                                             break
                                     if found:
                                         break
+
+                        # Display response
                         st.session_state.messages.append(
                             {"role": "assistant", "content": response}
                         )
@@ -218,25 +235,31 @@ def main():
                         st.write(f"Table on Page {page.get('page_number')}")
                         st.dataframe(table["translated_table"])
 
-        with st.expander("View WordCloud"):
+        with st.expander("View WordClouds"):
             maxwords = st.number_input(
                 "Top words to display", min_value=1, max_value=1000, value=100
             )
             st.info(f"Displaying top {maxwords} words")
-            wordcloud = wcg.generate_wordcloud(
-                text=st.session_state.ALL_TEXT,
-                max_words=maxwords,
-                height=200,
-                width=400,
-            )
-            translated_wordcloud = wcg.generate_wordcloud(
-                text=st.session_state.ALL_TEXT_TRANSLATED,
-                max_words=maxwords,
-                height=200,
-                width=400,
-            )
-            st.pyplot(wordcloud, use_container_width=True)
-            st.pyplot(translated_wordcloud)
+
+            wordcloud_col, translated_wordcloud_col = st.columns(2)
+            with wordcloud_col:
+                st.markdown(f"**Vernacular WordCloud**")
+                wordcloud = wcg.generate_wordcloud(
+                    text=st.session_state.ALL_TEXT,
+                    max_words=maxwords,
+                    height=200,
+                    width=400,
+                )
+                st.pyplot(wordcloud)
+            with translated_wordcloud_col:
+                st.markdown(f"**English WordCloud**")
+                translated_wordcloud = wcg.generate_wordcloud(
+                    text=st.session_state.ALL_TEXT_TRANSLATED,
+                    max_words=maxwords,
+                    height=200,
+                    width=400,
+                )
+                st.pyplot(translated_wordcloud)
 
         with st.expander("View Images"):
             for page in st.session_state.PAGES_DATA:
@@ -246,6 +269,14 @@ def main():
                         image["image_url"],
                         caption=f"{caption}\nFound on Page: {page.get('page_number')}",
                     )
+
+        with st.expander("View Text Chunks"):
+            for document in st.session_state.DOCUMENTS:
+                if document.metadata.get("type") == "text":
+                    st.markdown(
+                        f"**Text Chunk {document.metadata.get('text_chunk_key').replace('text_chunk', '')}**"
+                    )
+                    st.markdown(document.page_content)
 
         # print(st.session_state.PAGES_DATA)
 

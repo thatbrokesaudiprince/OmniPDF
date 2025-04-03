@@ -8,5 +8,5 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./frontend:/app
+      - ./frontend:/app/frontend
     # command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0

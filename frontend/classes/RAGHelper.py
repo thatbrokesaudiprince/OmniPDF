@@ -28,12 +28,6 @@ class RAGHelper:
 
     def __init__(self):
         self.message = "Hello World, I am a helper class for RAG."
-        self.vectorstore_path = (
-            r"C:\Users\Kidd\Desktop\eop-workspace\OmniPDF\vector-database\vectorstore"
-        )
-        # embedding_function = HuggingFaceEmbeddings(
-        #     model_name="sentence-transformers/all-MiniLM-L6-v2"
-        # )
         embedding_function = NomicEmbeddings(
             model="text-embedding-nomic-embed-text-v1.5-embedding"
         )
@@ -42,10 +36,16 @@ class RAGHelper:
     def get(self) -> str:
         return self.message
 
+    def get_all_documents(self) -> List[Document]:
+        if self.vectorstore:
+            return self.vectorstore.get()
+
     def add_docs_to_chromadb(self, docs) -> None:
+        if self.vectorstore:
+            self.vectorstore.reset_collection()
         return self.vectorstore.add_documents(docs)
 
-    def retrieve_relevant_docs(self, user_query: str) -> list[Document]:
+    def retrieve_relevant_docs(self, user_query: str, top_k: int) -> list[Document]:
         """Retrieve relevant documents from vector database based on user
         query.
 
@@ -63,7 +63,7 @@ class RAGHelper:
         # Read vector database as DataFrame
         results = self.vectorstore.similarity_search(
             user_query,
-            k=5,
+            k=top_k,
         )
 
         # Retrieve relevant docs

@@ -148,7 +148,7 @@ def rag_prompt(prompt, docs, pages_data, client: OpenAI) -> str:
     start_time = time.time()
 
     helping = ""
-    for doc in docs:
+    for i, doc in enumerate(docs):
         if doc.metadata.get("type") == "text":
             helping += f"- {doc.page_content}\n"
         elif doc.metadata.get("type") == "table":
@@ -174,6 +174,12 @@ def rag_prompt(prompt, docs, pages_data, client: OpenAI) -> str:
                 if found:
                     break
 
+        # Keep number of tokens within limit
+        if len(helping) > 4096:
+            helping = helping[: 4000 - len(prompt)]
+            docs = docs[: i + 1]
+            break
+
     prompt_with_help = f"""Answer this prompt:
         {prompt}
         Use the following pieces of context (if needed) to support and answer the question.
@@ -196,4 +202,4 @@ def rag_prompt(prompt, docs, pages_data, client: OpenAI) -> str:
     inference_time = time.time() - start_time
     print(f"Inference time: {inference_time} seconds")
 
-    return response.choices[0].message.content
+    return response.choices[0].message.content, docs

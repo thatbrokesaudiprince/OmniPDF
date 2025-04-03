@@ -62,7 +62,7 @@ class PDFProcessor:
                     )
                 else:
                     filtered_text = raw_text
-                translated_text = translate_text(raw_text, CLIENT)
+                translated_text = translate_text(filtered_text, CLIENT)
                 translated_tables = [
                     translate_table(tbp.format_for_json(table), CLIENT)
                     for table in tables
@@ -132,14 +132,12 @@ class PDFProcessor:
                 with open(img_path, "wb") as f:
                     f.write(img_bytes)
                 print(f"✅ Successfully extracted: {img_path}")
-                # Store the image path in the page data
                 self.pages_data[page_number]["images"].append(
                     {
                         "key": f"image_caption_{page_number + 1}_{img_index + 1}",
-                        "image_url": image_url,
-                        "caption": caption_image(image_path=image_url),
+                        "image_url": img_path,
+                        "caption": caption_image(img_path, CLIENT),
                     }
-                    for image_url in img_path
                 )
 
     def _extract_text_from_images(self, images: list) -> str:

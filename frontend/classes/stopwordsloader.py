@@ -7,7 +7,7 @@ class StopwordsISO:
     A class to manage stopwords for multiple languages based on ISO 639-1 language codes.
     """
 
-    def __init__(self, filepath: str = "frontend/static/stopwords-iso.json"):
+    def __init__(self, filepath: str = "static/stopwords-iso.json"):
         """
         Initializes the StopwordsISO instance by loading stopwords from a JSON file.
 
