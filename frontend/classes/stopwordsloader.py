@@ -6,10 +6,11 @@ class StopwordsISO:
     """
     A class to manage stopwords for multiple languages based on ISO 639-1 language codes.
     """
-    def __init__(self, filepath: str = 'frontend/static/stopwords-iso.json'):
+
+    def __init__(self, filepath: str = "frontend/static/stopwords-iso.json"):
         """
         Initializes the StopwordsISO instance by loading stopwords from a JSON file.
-        
+
         Parameters
         ----------
         filepath : str, optional
@@ -35,12 +36,12 @@ class StopwordsISO:
     def stopwords(self, langs: Union[str, Iterable[str]]) -> Set[str]:
         """
         Retrieves a set of stopwords for the requested language(s).
-        
+
         Parameters
         ----------
         langs : str or Iterable[str]
             A language code or a collection of language codes in ISO 639-1 format.
-            
+
         Returns
         -------
         Set[str]
@@ -58,9 +59,9 @@ class StopwordsISO:
                         words.update(self._stopwords_all[lang])
             except TypeError:
                 print("'langs' must be a string or an iterable of strings.")
-        
+
         return words
-    
+
     def get_all_stopwords(self) -> Set[str]:
         """Returns a set of all stopwords across all supported languages."""
         words = set()

@@ -144,13 +144,39 @@ def translate_table(table, client: OpenAI) -> str:
     return json.loads(response.choices[0].message.content)
 
 
-def rag_prompt(prompt, docs, client: OpenAI) -> str:
+def rag_prompt(prompt, docs, pages_data, client: OpenAI) -> str:
     start_time = time.time()
 
-    helping = "\n".join([f" - {doc.page_content}" for doc in docs])
+    helping = ""
+    for doc in docs:
+        if doc.metadata.get("type") == "text":
+            helping += f"- {doc.page_content}\n"
+        elif doc.metadata.get("type") == "table":
+            found = False
+            for page in pages_data:
+                for trans_table_summary in page.get("translated_tables_summary", []):
+                    if trans_table_summary["key"] == doc.metadata.get(
+                        "trans_table_summary_key"
+                    ):
+                        helping += f"- {trans_table_summary['translated_table']}\n"
+                        found = True
+                        break
+                if found:
+                    break
+        elif doc.metadata.get("type") == "image":
+            found = False
+            for page in pages_data:
+                for image in page.get("images", []):
+                    if image["key"] == doc.metadata.get("image_caption_key"):
+                        helping += f"- {image['caption']}\n"
+                        found = True
+                        break
+                if found:
+                    break
+
     prompt_with_help = f"""Answer this prompt:
         {prompt}
-        Use the following pieces of context (if needed) to support and answer the question. If you do not know, then say do not know:
+        Use the following pieces of context (if needed) to support and answer the question.
         {helping}
     """
 
@@ -160,7 +186,7 @@ def rag_prompt(prompt, docs, client: OpenAI) -> str:
             {
                 "role": "system",
                 "content": """
-                    You are a helpful assistant with answering user questions with RAG capabilities. You will be given documents relevant to the question for support.
+                    You are a helpful assistant for answering user questions with detailed information. You also have RAG capabilities, thus you will be given retrieved documents that are relevant to the question.
                 """,
             },
             {"role": "user", "content": prompt_with_help},

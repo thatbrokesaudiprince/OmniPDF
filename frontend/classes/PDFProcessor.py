@@ -69,11 +69,11 @@ class PDFProcessor:
                 ]
                 translated_tables_summary = [
                     {
-                        "key": f"trans_table_summary_{i+1}",
+                        "key": f"trans_table_summary_{i + 1}_{j + 1}",
                         "translated_table": translated_table,
                         "summary": summarize_table(translated_table, CLIENT),
                     }
-                    for i, translated_table in enumerate(translated_tables)
+                    for j, translated_table in enumerate(translated_tables)
                 ]
                 # Store extracted data
                 self.pages_data.append(
@@ -128,15 +128,14 @@ class PDFProcessor:
                 xref = img_obj[0]
                 base_image = doc.extract_image(xref)
                 img_bytes = base_image["image"]
-                img_path = (
-                    f"extracted_images/embedded_page_{page_number + 1}_{img_index}.png"
-                )
+                img_path = f"extracted_images/embedded_page_{page_number + 1}_{img_index + 1}.png"
                 with open(img_path, "wb") as f:
                     f.write(img_bytes)
                 print(f"✅ Successfully extracted: {img_path}")
                 # Store the image path in the page data
                 self.pages_data[page_number]["images"].append(
                     {
+                        "key": f"image_caption_{page_number + 1}_{img_index + 1}",
                         "image_url": image_url,
                         "caption": caption_image(image_path=image_url),
                     }

@@ -23,7 +23,7 @@ It aims to bridge language gaps and enhance document comprehension through the i
 
 ## RAG Diagram
 
-![RAG Diagram](images/Multi-modal_Rag_Diagram.png)
+![RAG Diagram](images/Multi-modal_RAG_Diagram.png)
 
 ## Installation
 
