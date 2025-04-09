@@ -23,12 +23,6 @@ app.add_middleware(
 rag_helper = RAGHelper()
 
 
-@app.get("/")
-def hello_world():
-    exampleClass = HelloWorld()
-    return {"Message": exampleClass.get()}
-
-
 @app.post("/pdf_pages")
 async def retrieve_pdf_pages(file: UploadFile = File(...)):
     """Retrieve PDF pages.
