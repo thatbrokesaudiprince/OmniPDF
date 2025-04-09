@@ -1,0 +1,16 @@
+chromadb
+fastapi
+langchain
+langchain-chroma
+langchain-core
+langchain-community
+langchain-huggingface
+langchain-text-splitters
+openai
+pandas
+pdf2image
+pdfplumber
+PyMuPDF
+pytesseract
+python-multipart
+uvicorn

@@ -1,12 +1,41 @@
-version: '3.8'
-
 services:
-  streamlit-app:
+  omnipdf-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: omnipdf-backend
+    ports:
+      - "8003:8003"
+    restart: always
+    environment:
+      - LM_API_URL=http://host.docker.internal:1234/v1 # CHANGE THIS TO YOUR LM API URL
+      - LM_API_KEY=lm-studio # CHANGE THIS TO YOUR LM API KEY
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./backend:/app/backend
+
+  omnipdf-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: omnipdf-frontend
     ports:
-      - "8501:8501"
+      - "8504:8504"
+    environment:
+      - BACKEND_URL=http://omnipdf-backend:8003
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: always
     volumes:
       - ./frontend:/app/frontend
-    # command: streamlit run app.py --server.port=8501 --server.address=0.0.0.0

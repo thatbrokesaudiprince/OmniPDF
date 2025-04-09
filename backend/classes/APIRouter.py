@@ -1,18 +1,22 @@
-# Example: reuse your existing OpenAI setup
-from openai import OpenAI
 import base64
 import json
+import os
 import time
-import streamlit as st
 
-# Point to the local server
-CLIENT = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+from openai import OpenAI
+
+# For LM Studio models
+LM_API_URL = os.getenv("LM_API_URL")
+LM_API_KEY = os.getenv("LM_API_KEY")
+
+# Point to the local LM Studio server
+CLIENT = OpenAI(base_url=LM_API_URL, api_key=LM_API_KEY)
 
 
 def caption_image(image_path: str, client: OpenAI) -> str:
-
     with open(image_path, "rb") as image_file:
         base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+
     start_time = time.time()
     response = client.chat.completions.create(
         model="llava-v1.5-7b",
@@ -49,7 +53,7 @@ def translate_text(text: str, client: OpenAI) -> str:
         messages=[
             {
                 "role": "system",
-                "content": "You are an assistant specializing in translating content into english, the user will provide strings and your job is to translate them into english. Only reply with the translated english text with no further inputs while keeping the original formatting the same",
+                "content": "You are an assistant specializing in translating content into english, the user will provide strings and your job is to translate them into english. Only reply with the translated english text with no further inputs and explanation while keeping the original formatting the same",
             },
             {"role": "user", "content": text},
         ],
@@ -175,8 +179,8 @@ def rag_prompt(prompt, docs, pages_data, client: OpenAI) -> str:
                     break
 
         # Keep number of tokens within limit
-        if len(helping) > 4096:
-            helping = helping[: 4000 - len(prompt)]
+        if len(helping) > 8192:
+            helping = helping[: 8000 - len(prompt)]
             docs = docs[: i + 1]
             break
 

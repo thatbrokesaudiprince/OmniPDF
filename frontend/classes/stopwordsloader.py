@@ -14,7 +14,7 @@ class StopwordsISO:
         Parameters
         ----------
         filepath : str, optional
-            Path to the stopwords JSON file, by default 'frontend/stopwords-iso.json'
+            Path to the stopwords JSON file, by default 'frontend/static/stopwords-iso.json'
         """
         self._stopwords_all = self._load_stopwords(filepath)
         self._langs = set(self._stopwords_all.keys())
